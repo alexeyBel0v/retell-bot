@@ -16,6 +16,7 @@ if (!OPENAI_API_KEY) {
 const bot = new TelegramBot(TOKEN);
 
 exports.handler = async (event, context) => {
+    let chatId; // Для хранения ID чата
     try {
         console.log("Full event:", JSON.stringify(event, null, 2));
 
@@ -40,15 +41,22 @@ exports.handler = async (event, context) => {
         }
 
         const message = body.message;
+        if (!message) {
+            console.log("No message field in update. Full body:", JSON.stringify(body, null, 2));
+            return {
+                statusCode: 200,
+                body: JSON.stringify({ message: "OK" })
+            };
+        }
 
-        if (message && message.text) {
+        if (message.text) {
+            chatId = message.chat.id; // Сохраняем ID чата
             const userName = message.from.first_name;
             const userMessage = message.text;
 
             console.log(`Received message: "${userMessage}" from ${userName}`);
 
-            // Устанавливаем таймаут для OpenAI
-            const openAiResponse = await Promise.race([
+            const response = await Promise.race([
                 axios.post(
                     'https://api.openai.com/v1/chat/completions',
                     {
@@ -73,15 +81,15 @@ exports.handler = async (event, context) => {
                         }
                     }
                 ),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout")), 8000)) // Таймаут 8 секунд
+                new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout")), 8000))
             ]);
 
-            const sarcasticComment = openAiResponse.data.choices[0].message.content;
+            const sarcasticComment = response.data.choices[0].message.content;
             console.log(`OpenAI response: "${sarcasticComment}"`);
 
-            await bot.sendMessage(message.chat.id, sarcasticComment);
+            await bot.sendMessage(chatId, sarcasticComment);
         } else {
-            console.log("No valid message in request");
+            console.log("No text in message");
         }
 
         return {
@@ -90,8 +98,11 @@ exports.handler = async (event, context) => {
         };
     } catch (error) {
         console.error("Error:", error.message || error);
-        if (message && message.chat && message.chat.id) {
-            await bot.sendMessage(message.chat.id, `${message.from.first_name}, я бы сказал что-то язвительное, но мой ИИ-прицел сбился. Пиши ещё!`);
+        // Проверяем, есть ли chatId для ответа
+        if (chatId) {
+            await bot.sendMessage(chatId, "Ой, похоже, мой сарказм застрял в пробке OpenAI. Попробуй ещё раз!");
+        } else {
+            console.log("No chat ID available to send fallback message");
         }
         return {
             statusCode: 500,
