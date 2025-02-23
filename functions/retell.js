@@ -17,7 +17,26 @@ const bot = new TelegramBot(TOKEN);
 
 exports.handler = async (event, context) => {
     try {
-        const body = JSON.parse(event.body);
+        // Проверка на наличие event.body
+        if (!event.body) {
+            console.error("No body provided in the request");
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: "No body provided" })
+            };
+        }
+
+        let body;
+        try {
+            body = JSON.parse(event.body);
+        } catch (parseError) {
+            console.error("Failed to parse JSON:", parseError.message);
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ error: "Invalid JSON" })
+            };
+        }
+
         const message = body.message;
 
         if (message && message.text) {
@@ -55,6 +74,8 @@ exports.handler = async (event, context) => {
             console.log(`OpenAI response: "${sarcasticComment}"`);
 
             await bot.sendMessage(message.chat.id, sarcasticComment);
+        } else {
+            console.log("No valid message in request");
         }
 
         return {
@@ -63,7 +84,9 @@ exports.handler = async (event, context) => {
         };
     } catch (error) {
         console.error("Error:", error.message || error);
-        await bot.sendMessage(message.chat.id, `${message.from.first_name}, я бы сказал что-то язвительное, но мой ИИ-прицел сбился. Пиши ещё!`);
+        if (message && message.chat && message.chat.id) {
+            await bot.sendMessage(message.chat.id, `${message.from.first_name}, я бы сказал что-то язвительное, но мой ИИ-прицел сбился. Пиши ещё!`);
+        }
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message || "Internal Server Error" })
