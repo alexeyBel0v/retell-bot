@@ -1,7 +1,8 @@
 [build]
-  functions = "functions"
+  functions = "functions"  # Папка с функциями
 
 [[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/retell"
-  status = 200
+  from = "/*"             # Все запросы
+  to = "/.netlify/functions/retell"  # К функции retell
+  status = 200            # Статус ответа
+  force = true            # Принудительно перенаправлять
