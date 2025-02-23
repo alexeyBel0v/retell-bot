@@ -17,7 +17,8 @@ const bot = new TelegramBot(TOKEN);
 
 exports.handler = async (event, context) => {
     try {
-        // Проверка на наличие event.body
+        console.log("Full event:", JSON.stringify(event, null, 2));
+
         if (!event.body) {
             console.error("No body provided in the request");
             return {
@@ -29,6 +30,7 @@ exports.handler = async (event, context) => {
         let body;
         try {
             body = JSON.parse(event.body);
+            console.log("Parsed body:", JSON.stringify(body, null, 2));
         } catch (parseError) {
             console.error("Failed to parse JSON:", parseError.message);
             return {
@@ -45,32 +47,36 @@ exports.handler = async (event, context) => {
 
             console.log(`Received message: "${userMessage}" from ${userName}`);
 
-            const response = await axios.post(
-                'https://api.openai.com/v1/chat/completions',
-                {
-                    model: "gpt-3.5-turbo",
-                    messages: [
-                        {
-                            role: "system",
-                            content: "Ты язвительный и остроумный бот. Твоя задача — придумать едкий, саркастичный комментарий к сообщению пользователя, обращаясь к нему по имени. Не используй шаблоны, будь креативен и слегка ядовит."
-                        },
-                        {
-                            role: "user",
-                            content: `Сделай едкий комментарий к сообщению "${userMessage}" от ${userName}`
+            // Устанавливаем таймаут для OpenAI
+            const openAiResponse = await Promise.race([
+                axios.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    {
+                        model: "gpt-3.5-turbo",
+                        messages: [
+                            {
+                                role: "system",
+                                content: "Ты язвительный и остроумный бот. Твоя задача — придумать едкий, саркастичный комментарий к сообщению пользователя, обращаясь к нему по имени. Не используй шаблоны, будь креативен и слегка ядовит."
+                            },
+                            {
+                                role: "user",
+                                content: `Сделай едкий комментарий к сообщению "${userMessage}" от ${userName}`
+                            }
+                        ],
+                        max_tokens: 150,
+                        temperature: 1.0
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                            'Content-Type': 'application/json'
                         }
-                    ],
-                    max_tokens: 150,
-                    temperature: 1.0
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                        'Content-Type': 'application/json'
                     }
-                }
-            );
+                ),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("OpenAI timeout")), 8000)) // Таймаут 8 секунд
+            ]);
 
-            const sarcasticComment = response.data.choices[0].message.content;
+            const sarcasticComment = openAiResponse.data.choices[0].message.content;
             console.log(`OpenAI response: "${sarcasticComment}"`);
 
             await bot.sendMessage(message.chat.id, sarcasticComment);
